@@ -71,7 +71,7 @@ jobs:
       # This action generates a cost estimate and posts it
       # as a comment on the Pull Request.
       - name: Run Infracost
-        uses: infracost/infracost-action@v0.6.13
+        uses: infracost/infracost-action@v0
         with:
           # The path to our Terraform code
           path: ./terraform-examples/bad-infra
