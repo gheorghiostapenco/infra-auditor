@@ -1,0 +1,62 @@
+# .github/workflows/main.yml
+
+# 1. Name of our workflow
+name: "DevOps Auditor"
+
+# 2. When to run this workflow
+on:
+  pull_request:
+    # We only care about PRs targeting the 'main' branch
+    branches:
+      - main
+      - master # Good to include both common default branch names
+
+jobs:
+  # 3. Define our first job: security scanning
+  security-scan:
+    # We'll run this on the latest available Ubuntu runner
+    runs-on: ubuntu-latest
+
+    steps:
+      # 4. Step 1: Get the code from the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 5. Step 2: Authenticate to Google Cloud
+      # This action uses our GitHub Secrets to create an
+      # authentication file for Terraform and other tools.
+      - name: Authenticate to GCP
+        uses: "google-github-actions/auth@v2"
+        with:
+          # Use the JSON key we stored in the secret
+          credentials_json: "${{ secrets.GCP_SA_KEY }}"
+          
+      # 6. Step 3: Set up Terraform CLI
+      # This installs the 'terraform' binary for our runner
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 7. Step 4: Run 'terraform init'
+      # This is a best practice. It downloads the Google provider
+      # and prepares the directory for scanning.
+      - name: Terraform Init
+        # We MUST specify the directory with our code
+        working-directory: ./terraform-examples/bad-infra
+        run: terraform init
+        env:
+          # Set the project ID for the 'terraform' command
+          GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
+
+      # 8. Step 5: Run Checkov!
+      # This is the 'test'. We use the official Checkov action
+      # from Bridgecrew (the creators of Checkov).
+      - name: Scan Terraform with Checkov
+        uses: bridgecrew/checkov-action@v12
+        with:
+          # Point Checkov to the directory with our code
+          directory: ./terraform-examples/bad-infra
+          # We only care about the 'terraform' framework for now
+          framework: terraform
+          # By default, this action will FAIL the job if
+          # it finds any 'FAILED' checks, which is exactly
+          # what our project requires.
