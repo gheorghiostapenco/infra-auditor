@@ -72,7 +72,7 @@ jobs:
 
       # Infracost uses the clean path (no './')
       - name: Run Infracost
-        uses: infracost/actions@v3
+        uses: infracost/infracost-action@master
         with:
           path: terraform-examples/bad-infra
           behavior: update 
