@@ -32,6 +32,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # --- Debug: показать содержимое репозитория ---
+      - name: List root repo files
+        run: ls -la
+
+      - name: List Terraform directory
+        run: ls -la ${{ env.TERRAFORM_DIR }}
+
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -72,6 +79,10 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      # --- Debug: показать содержимое директории перед Infracost ---
+      - name: List Terraform directory before Infracost
+        run: ls -la ${{ env.TERRAFORM_DIR }}
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
