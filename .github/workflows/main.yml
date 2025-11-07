@@ -8,39 +8,84 @@ on:
       - main
       - master
 
+# This allows our 'cost-scan' job to write a comment
+# on the Pull Request.
+permissions:
+  contents: read
+  pull-requests: write # <-- Add this permission!
+
 jobs:
-  # --- JOB 1: SECURITY SCAN ---
+  # --- JOB 1: SECURITY SCAN (No changes here) ---
   security-scan:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Get the code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Authenticate to Google Cloud
       - name: Authenticate to GCP
         uses: "google-github-actions/auth@v2"
         with:
           credentials_json: "${{ secrets.GCP_SA_KEY }}"
-
-      # 3. Set up Terraform CLI
+          
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 4. Run 'terraform init'
       - name: Terraform Init
         working-directory: ./terraform-examples/bad-infra
         run: terraform init
         env:
           GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
 
-      # 5. Run Checkov
       - name: Scan Terraform with Checkov
-        uses: bridgecrew/checkov-action@v12
+        uses: bridgecrewio/checkov-action@v12
         with:
           directory: ./terraform-examples/bad-infra
           framework: terraform
-          # This is CRITICAL:
-          # We explicitly tell it to FAIL the build (no "soft fail")
-          soft_fail: false
+          soft_fail: false # <-- This fails the build (GOOD!)
+
+  # --- JOB 2: COST SCAN (This is NEW) ---
+  cost-scan:
+    runs-on: ubuntu-latest
+    # This job will run in parallel with 'security-scan'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: "google-github-actions/auth@v2"
+        with:
+          credentials_json: "${{ secrets.GCP_SA_KEY }}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ./terraform-examples/bad-infra
+        run: terraform init
+        env:
+          GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
+
+      # 5. Run Infracost
+      # This action generates a cost estimate and posts it
+      # as a comment on the Pull Request.
+      - name: Run Infracost
+        uses: infracost/infracost-action@v0.6.13
+        with:
+          # The path to our Terraform code
+          path: ./terraform-examples/bad-infra
+          
+          # This tells Infracost to post a comment
+          behavior: update 
+          
+          # Required fields for posting comments
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          infracost_api_key: ${{ secrets.INFRACOST_API_KEY }}
+          
+          # Use 'github-pr' to post a clean comment
+          post_condition: |
+            {
+              "has_diff": true,
+              "format": "github-pr"
+            }
