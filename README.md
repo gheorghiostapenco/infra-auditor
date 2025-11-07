@@ -45,6 +45,7 @@ The pipeline runs on every Pull Request targeting the `main`/`master` branch, ex
 5.  
 
 ## 🚀 How to Use This Reusable Workflow
+
 This project is not just a demo; it's a Reusable Workflow that can be "called" by any other repository to perform automated security and cost audits.
 
 To use this auditor in another project, follow these steps:
@@ -61,9 +62,12 @@ PROD_GCP_KEY: (or any name you choose) Paste the full JSON content of your GCP S
 ORG_INFRACOST_KEY: (or any name you choose) Paste your API key from cloud.infracost.io.
 
 2. Implementation
-In your other repository (the "consumer"), create a new file at .github/workflows/audit.yml. Paste the following code inside it:
+   
+In your other repository (the "consumer"), create a new file at .github/workflows/audit.yml.
+Paste the following code inside it:
 
-bash,,, 
+
+```yaml
 # .github/workflows/audit.yml
 # This workflow runs in your project and "calls" the auditor
 
@@ -88,6 +92,7 @@ jobs:
     secrets:
       GCP_SA_KEY: ${{ secrets.PROD_GCP_KEY }}
       INFRACOST_API_KEY: ${{ secrets.ORG_INFRACOST_KEY }}
+```
 
 
 ## 3. Configuration
