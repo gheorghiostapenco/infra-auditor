@@ -43,12 +43,3 @@ The pipeline runs on every Pull Request targeting the `main`/`master` branch, ex
 3.  **`cost-scan`:** **Succeeds (✔)**. Infracost **updates the comment**: **"Difference: -$345.00 per month"**.
 4.  **Result:** **"All checks have passed"** (✔), and the "Merge" button turns green, allowing the safe merging of the code.
 
-## 🌟 Skills Demonstrated
-
-* **IaC:** Writing and maintaining production-ready Terraform code (GCP).
-* **CI/CD Engineering:** Building robust, multi-stage, parallel pipelines with GitHub Actions.
-* **Security Automation:** Integrating and managing **Checkov** policies, including utilizing Hard Fail and managing acceptable policy exceptions (`checkov:skip`).
-* **FinOps & Cost Governance:** Implementing **Infracost** to provide cost forecasting and advanced logic for calculating the cost difference (`infracost diff`).
-* **Advanced Troubleshooting:** Solving complex GitHub Actions runner issues, specifically fixing unreliable pathing (`working-directory` vs. `cd`) and resolving external action versioning conflicts.
-
-Would you like to review this documentation, or should we move on to the next project idea?
