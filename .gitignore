@@ -1,0 +1,62 @@
+# .gitignore
+
+# -------------------------------------------------------------------
+# Terraform
+# -------------------------------------------------------------------
+
+# Ignore local Terraform state files and backups
+# These files contain your infrastructure's state and may hold secrets.
+*.tfstate
+*.tfstate.backup
+
+# Ignore .tfvars files, as they often contain secrets.
+# Commit a "variables.tf" or "example.tfvars" with no values instead.
+*.tfvars
+*.tfvars.json
+
+# Ignore plan files, as they can be large and contain sensitive info.
+*.tfplan
+
+# Ignore the .terraform directory, which contains provider plugins
+# and modules. This is generated locally by "terraform init".
+.terraform/
+
+# Ignore crash log files
+crash.log
+
+# -------------------------------------------------------------------
+# Infracost
+# -------------------------------------------------------------------
+
+# Ignore local Infracost caches or generated JSON files
+.infracost/
+infracost-base.json
+infracost.json
+
+# -------------------------------------------------------------------
+# General Secrets / Environment
+# -------------------------------------------------------------------
+
+# Ignore general environment variable files
+.env
+
+# Ignore private keys
+*.key
+*.pem
+
+# -------------------------------------------------------------------
+# OS & Editor Specific
+# -------------------------------------------------------------------
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# VSCode
+.vscode/
+
+# JetBrains (GoLand, IntelliJ)
+.idea/
