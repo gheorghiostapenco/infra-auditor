@@ -53,6 +53,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for git checkout of base branch
 
       - name: Authenticate to GCP
         uses: "google-github-actions/auth@v2"
@@ -62,24 +64,35 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # CRITICAL FIX: Removed working-directory and used 'cd' in the run command
-      - name: Terraform Init
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      # Generate baseline cost estimate from base branch
+      - name: Generate Infracost baseline
         run: |
-          cd terraform-examples/bad-infra
-          terraform init
+          git checkout ${{ github.base_ref }}
+          infracost breakdown --path=terraform-examples/bad-infra --format=json --out-file=/tmp/infracost-base.json
         env:
           GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
 
-      # Infracost uses the clean path (no './')
-      - name: Run Infracost
-        uses: infracost/infracost-action@master
-        with:
-          path: terraform-examples/bad-infra
-          behavior: update 
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          infracost_api_key: ${{ secrets.INFRACOST_API_KEY }}
-          post_condition: |
-            {
-              "has_diff": true,
-              "format": "github-pr"
-            }
+      # Switch back to PR branch and generate diff
+      - name: Generate Infracost diff
+        run: |
+          git checkout -
+          infracost diff --path=terraform-examples/bad-infra --compare-to=/tmp/infracost-base.json --format=json --out-file=/tmp/infracost.json
+        env:
+          GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
+
+      # Post comment only if there is a diff
+      - name: Post Infracost comment
+        run: |
+          has_diff=$(infracost output --path=/tmp/infracost.json --format=json | jq '.diffTotalMonthlyCost != 0')
+          if [ "$has_diff" = "true" ]; then
+            infracost comment github --path=/tmp/infracost.json \
+                                     --repo=${{ github.repository }} \
+                                     --github-token=${{ github.token }} \
+                                     --pull-request=${{ github.event.pull_request.number }} \
+                                     --behavior=update
+          fi
