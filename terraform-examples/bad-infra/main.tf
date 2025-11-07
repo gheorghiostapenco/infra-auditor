@@ -16,8 +16,11 @@ provider "google" {
 }
 
 # 1. COST FIX (from n2-standard-16 to e2-micro)
+
+# We are intentionally skipping the CSEK check for this demo VM.
+# checkov:skip=CKV_GCP_38
 resource "google_compute_instance" "expensive_vm" {
-  name         = "cheap-vm-demo" # Renamed
+  name         = "cheap-vm-demo"
   machine_type = "e2-micro"      # <-- THIS IS CHEAP!
   zone         = "us-central1-a"
 
