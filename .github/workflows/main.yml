@@ -31,7 +31,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        working-directory: ./terraform-examples/bad-infra
+        working-directory: terraform-examples/bad-infra
         run: terraform init
         env:
           GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
@@ -40,7 +40,7 @@ jobs:
       - name: Scan Terraform with Checkov
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: ./terraform-examples/bad-infra
+          directory: terraform-examples/bad-infra
           framework: terraform
           soft_fail: false 
 
@@ -61,7 +61,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        working-directory: ./terraform-examples/bad-infra
+        working-directory: terraform-examples/bad-infra
         run: terraform init
         env:
           GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
@@ -70,7 +70,7 @@ jobs:
       - name: Run Infracost
         uses: infracost/infracost-action@v0
         with:
-          path: ./terraform-examples/bad-infra
+          path: terraform-examples/bad-infra
           behavior: update 
           github_token: ${{ secrets.GITHUB_TOKEN }}
           infracost_api_key: ${{ secrets.INFRACOST_API_KEY }}
