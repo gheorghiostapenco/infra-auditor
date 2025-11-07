@@ -30,18 +30,19 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # CRITICAL FIX: Removed './' from working-directory
+      # CRITICAL FIX: Removed working-directory and used 'cd' in the run command
       - name: Terraform Init
-        working-directory: terraform-examples/bad-infra 
-        run: terraform init
+        run: |
+          cd terraform-examples/bad-infra
+          terraform init
         env:
           GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
 
-      # CRITICAL FIX: Corrected action path to 'bridgecrewio' and enforced hard fail
+      # Checkov uses the clean path (no './')
       - name: Scan Terraform with Checkov
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: terraform-examples/bad-infra # CRITICAL FIX: Removed './'
+          directory: terraform-examples/bad-infra
           framework: terraform
           soft_fail: false 
 
@@ -61,18 +62,19 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # CRITICAL FIX: Removed './' from working-directory
+      # CRITICAL FIX: Removed working-directory and used 'cd' in the run command
       - name: Terraform Init
-        working-directory: terraform-examples/bad-infra
-        run: terraform init
+        run: |
+          cd terraform-examples/bad-infra
+          terraform init
         env:
           GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
 
-      # CRITICAL FIX: Corrected action version to '@v0'
+      # Infracost uses the clean path (no './')
       - name: Run Infracost
         uses: infracost/infracost-action@v0
         with:
-          path: terraform-examples/bad-infra # CRITICAL FIX: Removed './'
+          path: terraform-examples/bad-infra
           behavior: update 
           github_token: ${{ secrets.GITHUB_TOKEN }}
           infracost_api_key: ${{ secrets.INFRACOST_API_KEY }}
