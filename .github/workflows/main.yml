@@ -1,62 +1,117 @@
 # .github/workflows/main.yml
 
-# 1. Name of our workflow
 name: "DevOps Auditor"
 
-# 2. When to run this workflow
 on:
   pull_request:
-    # We only care about PRs targeting the 'main' branch
     branches:
       - main
-      - master # Good to include both common default branch names
+      - master
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TERRAFORM_DIR: terraform-examples/prod-infra
+  GOOGLE_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+  GCP_CSEK_KEY: ${{ secrets.GCP_CSEK_KEY }}
+  INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+  PLAN_FILE: tfplan
 
 jobs:
-  # 3. Define our first job: security scanning
+  # --------------------------
+  # SECURITY SCAN + Terraform Plan
+  # --------------------------
   security-scan:
-    # We'll run this on the latest available Ubuntu runner
     runs-on: ubuntu-latest
-
+    outputs:
+      plan-file-name: ${{ env.PLAN_FILE }}
     steps:
-      # 4. Step 1: Get the code from the repository
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 5. Step 2: Authenticate to Google Cloud
-      # This action uses our GitHub Secrets to create an
-      # authentication file for Terraform and other tools.
+      # --- Debug: показать содержимое репозитория ---
+      - name: List root repo files
+        run: ls -la
+
+      - name: List Terraform directory
+        run: ls -la ${{ env.TERRAFORM_DIR }}
+
       - name: Authenticate to GCP
-        uses: "google-github-actions/auth@v2"
+        uses: google-github-actions/auth@v2
         with:
-          # Use the JSON key we stored in the secret
-          credentials_json: "${{ secrets.GCP_SA_KEY }}"
-          
-      # 6. Step 3: Set up Terraform CLI
-      # This installs the 'terraform' binary for our runner
+          credentials_json: ${{ env.GCP_CREDENTIALS }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 7. Step 4: Run 'terraform init'
-      # This is a best practice. It downloads the Google provider
-      # and prepares the directory for scanning.
       - name: Terraform Init
-        # We MUST specify the directory with our code
-        working-directory: ./terraform-examples/bad-infra
+        working-directory: ${{ env.TERRAFORM_DIR }}
         run: terraform init
-        env:
-          # Set the project ID for the 'terraform' command
-          GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
 
-      # 8. Step 5: Run Checkov!
-      # This is the 'test'. We use the official Checkov action
-      # from Bridgecrew (the creators of Checkov).
-      - name: Scan Terraform with Checkov
-        uses: bridgecrew/checkov-action@v12
+      - name: Terraform Validate & Plan
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          terraform validate
+          terraform plan -out=${{ env.PLAN_FILE }} -var="project_id=${{ env.GOOGLE_PROJECT_ID }}" -var="csek_raw_key=${{ env.GCP_CSEK_KEY }}"
+
+      - name: Upload Terraform Plan Artifact
+        uses: actions/upload-artifact@v4
         with:
-          # Point Checkov to the directory with our code
-          directory: ./terraform-examples/bad-infra
-          # We only care about the 'terraform' framework for now
+          name: tfplan
+          path: ${{ env.TERRAFORM_DIR }}/${{ env.PLAN_FILE }}
+
+      - name: Scan Terraform with Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ${{ env.TERRAFORM_DIR }}
           framework: terraform
-          # By default, this action will FAIL the job if
-          # it finds any 'FAILED' checks, which is exactly
-          # what our project requires.
+          soft_fail: false
+
+  # --------------------------
+  # COST SCAN
+  # --------------------------
+  cost-scan:
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # --- Debug: показать содержимое директории перед Infracost ---
+      - name: List Terraform directory before Infracost
+        run: ls -la ${{ env.TERRAFORM_DIR }}
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.GCP_CREDENTIALS }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Download Terraform Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init
+
+      - name: Run Infracost
+        uses: infracost/infracost-action@v1
+        with:
+          path: ${{ env.TERRAFORM_DIR }}
+          terraform_plan_file: ${{ env.TERRAFORM_DIR }}/${{ env.PLAN_FILE }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          infracost_api_key: ${{ env.INFRACOST_API_KEY }}
+          behavior: update
+          post_condition: |
+            {
+              "has_diff": true,
+              "format": "github-pr"
+            }
