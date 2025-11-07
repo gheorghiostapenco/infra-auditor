@@ -1,0 +1,112 @@
+# .github/workflows/reusable-auditor.yml
+# This workflow is now a "Reusable Workflow" (a template)
+
+name: "Reusable DevOps Auditor"
+
+# 1. Trigger changed to 'workflow_call'
+on:
+  workflow_call:
+    # 2. Define the inputs this workflow accepts
+    inputs:
+      terraform_directory:
+        description: 'Path to the terraform code (e.g., terraform/prod)'
+        required: true
+        type: string
+        
+    # 3. Define the secrets this workflow needs
+    secrets:
+      GCP_SA_KEY:
+        description: 'GCP Service Account Key JSON'
+        required: true
+      INFRACOST_API_KEY:
+        description: 'API Key from cloud.infracost.io'
+        required: true
+
+# Permissions for Infracost to write a PR comment
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # --- JOB 1: SECURITY SCAN (Checkov) ---
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: "google-github-actions/auth@v2"
+        with:
+          # Use the secret passed from the "caller" workflow
+          credentials_json: "${{ secrets.GCP_SA_KEY }}"
+          
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: |
+          # Use the input variable for the path
+          cd ${{ inputs.terraform_directory }}
+          terraform init
+        env:
+          # Note: We can't pass GCP_PROJECT_ID as a secret, 
+          # it must be set in the 'caller' workflow's env.
+          # Or, the SA key must be bound to a single project.
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }} # This is a common pattern
+
+      - name: Scan Terraform with Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          # Use the input variable for the path
+          directory: ${{ inputs.terraform_directory }}
+          framework: terraform
+          soft_fail: false 
+
+  # --- JOB 2: COST SCAN (Infracost) ---
+  cost-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Needed for git checkout of base branch
+          fetch-depth: 0 
+
+      - name: Authenticate to GCP
+        uses: "google-github-actions/auth@v2"
+        with:
+          credentials_json: "${{ secrets.GCP_SA_KEY }}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          # Use the secret passed from the "caller"
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: Generate Infracost baseline
+        run: |
+          git checkout ${{ github.base_ref }}
+          # Use the input variable for the path
+          infracost breakdown --path=${{ inputs.terraform_directory }} --format=json --out-file=/tmp/infracost-base.json
+
+      - name: Generate Infracost diff
+        run: |
+          git checkout -
+          # Use the input variable for the path
+          infracost diff --path=${{ inputs.terraform_directory }} --compare-to=/tmp/infracost-base.json --format=json --out-file=/tmp/infracost.json
+
+      - name: Post Infracost comment
+        run: |
+          # Post comment only if there is a diff
+          has_diff=$(infracost output --path=/tmp/infracost.json --format=json | jq '.diffTotalMonthlyCost != 0')
+          if [ "$has_diff" = "true" ]; then
+            infracost comment github --path=/tmp/infracost.json \
+                                     --repo=${{ github.repository }} \
+                                     --github-token=${{ secrets.GITHUB_TOKEN }} \
+                                     --pull-request=${{ github.event.pull_request.number }} \
+                                     --behavior=update
+          fi
