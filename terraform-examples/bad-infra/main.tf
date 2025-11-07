@@ -79,6 +79,12 @@ variable "image_project" {
   default     = "debian-cloud"
 }
 
+# New variable for Customer Supplied Encryption Key
+variable "csek_raw_key" {
+  type        = string
+  description = "Base64-encoded 256-bit Customer Supplied Encryption Key (CSEK)"
+}
+
 # ----------------------
 # NETWORKING
 # ----------------------
@@ -124,11 +130,17 @@ resource "google_compute_instance" "vm" {
       size  = var.disk_size_gb
       type  = var.disk_type
     }
+
+    # ----------------------
+    # CSEK: Customer Supplied Encryption Key
+    # ----------------------
+    disk_encryption_key {
+      raw_key = var.csek_raw_key
+    }
   }
 
   network_interface {
     subnetwork = google_compute_subnetwork.subnet.id
-    # Optional: assign ephemeral external IP
     access_config {}
   }
 
