@@ -42,4 +42,61 @@ The pipeline runs on every Pull Request targeting the `main`/`master` branch, ex
 2.  **`security-scan`:** **Succeeds (✔)**. All security issues are resolved.
 3.  **`cost-scan`:** **Succeeds (✔)**. Infracost **updates the comment**: **"Difference: -$345.00 per month"**.
 4.  **Result:** **"All checks have passed"** (✔), and the "Merge" button turns green, allowing the safe merging of the code.
+5.  
 
+## 🚀 How to Use This Reusable Workflow
+This project is not just a demo; it's a Reusable Workflow that can be "called" by any other repository to perform automated security and cost audits.
+
+To use this auditor in another project, follow these steps:
+
+1. Prerequisites (In Your Other Repository)
+Before you can call the workflow, you must provide it with the necessary credentials. In the repository you want to audit:
+
+Go to Settings > Secrets and variables > Actions.
+
+Create the following Repository Secrets:
+
+PROD_GCP_KEY: (or any name you choose) Paste the full JSON content of your GCP Service Account Key here.
+
+ORG_INFRACOST_KEY: (or any name you choose) Paste your API key from cloud.infracost.io.
+
+2. Implementation
+In your other repository (the "consumer"), create a new file at .github/workflows/audit.yml. Paste the following code inside it:
+
+bash,,, 
+# .github/workflows/audit.yml
+# This workflow runs in your project and "calls" the auditor
+
+name: "Run DevOps Audit"
+
+on:
+  pull_request:
+
+jobs:
+  call-reusable-auditor:
+    runs-on: ubuntu-latest
+    
+    # 1. "Call" the auditor workflow from the 'infra-auditor' repo
+    uses: gheorghiostapenco/infra-auditor/.github/workflows/reusable-auditor.yml@main
+    
+    # 2. "Pass" your project-specific inputs
+    with:
+      # This is the path to YOUR Terraform code
+      terraform_directory: 'gcp/production-terraform'
+      
+    # 3. "Pass" your repository's secrets to the auditor
+    secrets:
+      GCP_SA_KEY: ${{ secrets.PROD_GCP_KEY }}
+      INFRACOST_API_KEY: ${{ secrets.ORG_INFRACOST_KEY }}
+
+
+## 3. Configuration
+You must customize the with: and secrets: sections to match your project:
+
+with.terraform_directory: Change 'gcp/production-terraform' to the actual path where your Terraform (.tf) files are located in this repository. (Use . if they are in the root).
+
+secrets.GCP_SA_KEY: This line passes your secret (${{ secrets.PROD_GCP_KEY }}) into the auditor's expected secret variable (GCP_SA_KEY). Make sure PROD_GCP_KEY matches the name you created in Step 1.
+
+secrets.INFRACOST_API_KEY: This does the same for your Infracost key.
+
+Once you commit this file, every new Pull Request in this repository will automatically run your full Checkov and Infracost audit, just as you configured it.
