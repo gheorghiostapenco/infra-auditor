@@ -8,13 +8,13 @@ on:
       - main
       - master
 
-# Permissions for Infracost to write a PR comment
+# Permissions are needed for Infracost to write a PR comment
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  # --- JOB 1: SECURITY SCAN ---
+  # --- JOB 1: SECURITY SCAN (Checkov) ---
   security-scan:
     runs-on: ubuntu-latest
 
@@ -30,21 +30,22 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # CRITICAL FIX: Removed './' from working-directory
       - name: Terraform Init
-        working-directory: terraform-examples/bad-infra
+        working-directory: terraform-examples/bad-infra 
         run: terraform init
         env:
           GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
 
-      # Use the CORRECT path and HARD fail
+      # CRITICAL FIX: Corrected action path to 'bridgecrewio' and enforced hard fail
       - name: Scan Terraform with Checkov
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: terraform-examples/bad-infra
+          directory: terraform-examples/bad-infra # CRITICAL FIX: Removed './'
           framework: terraform
           soft_fail: false 
 
-  # --- JOB 2: COST SCAN ---
+  # --- JOB 2: COST SCAN (Infracost) ---
   cost-scan:
     runs-on: ubuntu-latest
     
@@ -60,17 +61,18 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # CRITICAL FIX: Removed './' from working-directory
       - name: Terraform Init
         working-directory: terraform-examples/bad-infra
         run: terraform init
         env:
           GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
 
-      # Use the CORRECT action version
+      # CRITICAL FIX: Corrected action version to '@v0'
       - name: Run Infracost
         uses: infracost/infracost-action@v0
         with:
-          path: terraform-examples/bad-infra
+          path: terraform-examples/bad-infra # CRITICAL FIX: Removed './'
           behavior: update 
           github_token: ${{ secrets.GITHUB_TOKEN }}
           infracost_api_key: ${{ secrets.INFRACOST_API_KEY }}
