@@ -1,62 +1,98 @@
-# .github/workflows/main.yml
+# .github/workflows/main.yml (The FINAL, CORRECT version)
 
-# 1. Name of our workflow
 name: "DevOps Auditor"
 
-# 2. When to run this workflow
 on:
   pull_request:
-    # We only care about PRs targeting the 'main' branch
     branches:
       - main
-      - master # Good to include both common default branch names
+      - master
+
+# Permissions are needed for Infracost to write a PR comment
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
-  # 3. Define our first job: security scanning
+  # --- JOB 1: SECURITY SCAN (Checkov) ---
   security-scan:
-    # We'll run this on the latest available Ubuntu runner
     runs-on: ubuntu-latest
 
     steps:
-      # 4. Step 1: Get the code from the repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 5. Step 2: Authenticate to Google Cloud
-      # This action uses our GitHub Secrets to create an
-      # authentication file for Terraform and other tools.
       - name: Authenticate to GCP
         uses: "google-github-actions/auth@v2"
         with:
-          # Use the JSON key we stored in the secret
           credentials_json: "${{ secrets.GCP_SA_KEY }}"
           
-      # 6. Step 3: Set up Terraform CLI
-      # This installs the 'terraform' binary for our runner
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 7. Step 4: Run 'terraform init'
-      # This is a best practice. It downloads the Google provider
-      # and prepares the directory for scanning.
+      # CRITICAL FIX: Removed working-directory and used 'cd' in the run command
       - name: Terraform Init
-        # We MUST specify the directory with our code
-        working-directory: ./terraform-examples/bad-infra
-        run: terraform init
+        run: |
+          cd terraform-examples/bad-infra
+          terraform init
         env:
-          # Set the project ID for the 'terraform' command
           GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
 
-      # 8. Step 5: Run Checkov!
-      # This is the 'test'. We use the official Checkov action
-      # from Bridgecrew (the creators of Checkov).
+      # Checkov uses the clean path (no './')
       - name: Scan Terraform with Checkov
-        uses: bridgecrew/checkov-action@v12
+        uses: bridgecrewio/checkov-action@v12
         with:
-          # Point Checkov to the directory with our code
-          directory: ./terraform-examples/bad-infra
-          # We only care about the 'terraform' framework for now
+          directory: terraform-examples/bad-infra
           framework: terraform
-          # By default, this action will FAIL the job if
-          # it finds any 'FAILED' checks, which is exactly
-          # what our project requires.
+          soft_fail: false 
+
+  # --- JOB 2: COST SCAN (Infracost) ---
+  cost-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for git checkout of base branch
+
+      - name: Authenticate to GCP
+        uses: "google-github-actions/auth@v2"
+        with:
+          credentials_json: "${{ secrets.GCP_SA_KEY }}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      # Generate baseline cost estimate from base branch
+      - name: Generate Infracost baseline
+        run: |
+          git checkout ${{ github.base_ref }}
+          infracost breakdown --path=terraform-examples/bad-infra --format=json --out-file=/tmp/infracost-base.json
+        env:
+          GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
+
+      # Switch back to PR branch and generate diff
+      - name: Generate Infracost diff
+        run: |
+          git checkout -
+          infracost diff --path=terraform-examples/bad-infra --compare-to=/tmp/infracost-base.json --format=json --out-file=/tmp/infracost.json
+        env:
+          GOOGLE_PROJECT: "${{ secrets.GCP_PROJECT_ID }}"
+
+      # Post comment only if there is a diff
+      - name: Post Infracost comment
+        run: |
+          has_diff=$(infracost output --path=/tmp/infracost.json --format=json | jq '.diffTotalMonthlyCost != 0')
+          if [ "$has_diff" = "true" ]; then
+            infracost comment github --path=/tmp/infracost.json \
+                                     --repo=${{ github.repository }} \
+                                     --github-token=${{ github.token }} \
+                                     --pull-request=${{ github.event.pull_request.number }} \
+                                     --behavior=update
+          fi
