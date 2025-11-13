@@ -44,7 +44,7 @@ The pipeline runs on every Pull Request targeting the `main`/`master` branch, ex
 4.  **Result:** **"All checks have passed"** (✔), and the "Merge" button turns green, allowing the safe merging of the code.
 5.  
 
-## 🚀 How to Use This Reusable Workflow
+### How to Use This Reusable Workflow
 
 This project is not just a demo; it's a Reusable Workflow that can be "called" by any other repository to perform automated security and cost audits.
 
